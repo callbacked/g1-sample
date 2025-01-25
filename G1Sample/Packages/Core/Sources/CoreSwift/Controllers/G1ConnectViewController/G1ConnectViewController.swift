@@ -11,7 +11,7 @@ public class G1ConnectViewController: BaseViewController<G1ConnectViewModel> {
     
     private lazy var startScanButton: CombineButton = {
         let button = CombineButton(type: .system)
-        button.setTitle("Connect with G1", for: .normal)
+        button.setTitle("Scan for G1", for: .normal)
         return button
     }()
     
