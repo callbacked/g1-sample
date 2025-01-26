@@ -20,12 +20,6 @@ public class StartViewController: BaseViewController<StartViewModel> {
         return button
     }()
     
-    private lazy var talkToHostButton: CombineButton = {
-        let button = CombineButton(type: .system)
-        button.setTitle("Talk to the Host", for: .normal)
-        return button
-    }()
-    
     public override func viewDidLoad() {
         bindViewModel()
         super.viewDidLoad()
@@ -37,24 +31,16 @@ public class StartViewController: BaseViewController<StartViewModel> {
         
         view.backgroundColor = .systemOrange
         view.addSubview(connectWithG1Button)
-        view.addSubview(talkToHostButton)
         
         // Layout the buttons
         connectWithG1Button.translatesAutoresizingMaskIntoConstraints = false
-        talkToHostButton.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
             // Connect with G1 button constraints
             connectWithG1Button.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             connectWithG1Button.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -20),
             connectWithG1Button.widthAnchor.constraint(equalToConstant: 200),
-            connectWithG1Button.heightAnchor.constraint(equalToConstant: 50),
-            
-            // Talk to Host button constraints
-            talkToHostButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            talkToHostButton.topAnchor.constraint(equalTo: connectWithG1Button.bottomAnchor, constant: 20),
-            talkToHostButton.widthAnchor.constraint(equalToConstant: 200),
-            talkToHostButton.heightAnchor.constraint(equalToConstant: 50)
+            connectWithG1Button.heightAnchor.constraint(equalToConstant: 50)
         ])
     }
     
@@ -62,8 +48,7 @@ public class StartViewController: BaseViewController<StartViewModel> {
         
         let input = StartViewModel.Input(
             viewDidLoadIn: viewDidLoadPublisher.eraseToAnyPublisher(),
-            connectG1TapIn: connectWithG1Button.tapPublisher.eraseToAnyPublisher(),
-            talkToG1TapIn: talkToHostButton.tapPublisher.eraseToAnyPublisher()
+            connectG1TapIn: connectWithG1Button.tapPublisher.eraseToAnyPublisher()
             )
         
         let output = viewModel.convert(input: input)
@@ -80,18 +65,19 @@ public class StartViewController: BaseViewController<StartViewModel> {
             .receive(on: DispatchQueue.main).eraseToAnyPublisher()
             .sink { [weak self] in
                 guard let self else { return }
-                self.navigator?.presentModal(.popUpConnectG1)
-            }
-            .store(in: &cancellables)
-        
-        output.talkToG1TapOut
-            .receive(on: DispatchQueue.main).eraseToAnyPublisher()
-            .sink { [weak self] in
-                guard let self else { return }
-                
+                if G1Controller.shared.g1Connected {
+                    self.showAlert(title: "G1 Already Connected", message: "The G1 device is already connected.")
+                } else {
+                    self.navigator?.presentModal(.popUpConnectG1)
+                }
             }
             .store(in: &cancellables)
         
     }
 
+    private func showAlert(title: String, message: String) {
+        let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alertController.addAction(UIAlertAction(title: "OK", style: .default))
+        UIApplication.shared.keyWindow?.rootViewController?.present(alertController, animated: true)
+    }
 }

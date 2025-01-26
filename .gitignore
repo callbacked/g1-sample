@@ -62,3 +62,4 @@ fastlane/screenshots/**/*.png
 fastlane/test_output
 G1Sample/.DS_Store
 .DS_Store
+G1Sample/G1Sample.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved

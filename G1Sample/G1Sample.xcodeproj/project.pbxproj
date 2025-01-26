@@ -154,6 +154,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = G1Sample/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app requires Bluetooth access to connect to nearby devices.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to the microphone to support speech recognition for voice dictation of notes";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app needs access to speech recognition to support voice dictation of notes";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = "";
@@ -184,6 +186,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = G1Sample/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app requires Bluetooth access to connect to nearby devices.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to the microphone to support speech recognition for voice dictation of notes";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app needs access to speech recognition to support voice dictation of notes";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = "";

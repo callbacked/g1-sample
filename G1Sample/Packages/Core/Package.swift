@@ -12,16 +12,19 @@ let package = Package(
             targets: ["CoreSwift"]
         ),
     ],
+    dependencies: [
+        .package(url: "https://github.com/SVProgressHUD/SVProgressHUD.git", from: "2.2.5")
+    ],
     targets: [
         .target(
             name: "CoreObjC",
             dependencies: [],
             path: "Sources/CoreObjC",
-            publicHeadersPath: "include" // Specify where public headers are located
+            publicHeadersPath: "include"
         ),
         .target(
             name: "CoreSwift",
-            dependencies: ["CoreObjC"],
+            dependencies: ["CoreObjC", "SVProgressHUD"],
             path: "Sources/CoreSwift"
         )
     ]
