@@ -84,7 +84,14 @@ public final class G1BluetoothManager: NSObject {
             self?.aiTriggerTimeoutTimer = Timer(timeInterval: 6.0, repeats: false) { [weak self] _ in
                 guard let self = self else { return }
                 guard let rightPeripheral = self.rightPeripheral else { return }
+                guard let leftPeripheral = self.leftPeripheral else { return }
                 sendMicOn(to: rightPeripheral, isOn: false)
+                
+                if let leftChar = getWriteCharacteristic(for: leftPeripheral),
+                   let rightChar = getWriteCharacteristic(for: rightPeripheral) {
+                    exitAllFunctions(to: leftPeripheral, characteristic: leftChar)
+                    exitAllFunctions(to: rightPeripheral, characteristic: rightChar)
+                }
             }
             
             RunLoop.current.add((self?.aiTriggerTimeoutTimer)!, forMode: .default)
@@ -139,7 +146,6 @@ public final class G1BluetoothManager: NSObject {
                 aiMode = .AI_MIC_ON
             }
         case .BLE_REQ_TRANSFER_MIC_DATA:
-            //print("Received voice data: \(data.subdata(in: 1..<data.count).hexEncodedString())")
             self.voiceData = data
         case .BLE_REQ_DEVICE_ORDER:
             print("Received device order: \(data.subdata(in: 1..<data.count).hexEncodedString())")
@@ -205,6 +211,12 @@ public final class G1BluetoothManager: NSObject {
 }
 // MARK: Commands
 extension G1BluetoothManager {
+    
+    func exitAllFunctions(to peripheral: CBPeripheral, characteristic: CBCharacteristic) {
+        var data = Data()
+        data.append(Commands.BLE_EXIT_ALL_FUNCTIONS.rawValue)
+        peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+    }
     
     private func sendMicOn(to peripheral: CBPeripheral, isOn: Bool) {
         

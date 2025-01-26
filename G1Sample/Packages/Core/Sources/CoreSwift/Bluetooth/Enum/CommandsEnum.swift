@@ -6,6 +6,7 @@
 //
 
 enum Commands: UInt8 {
+    case BLE_EXIT_ALL_FUNCTIONS = 0x18
     case BLE_REQ_INIT = 0x4D
     case BLE_REQ_HEARTBEAT = 0x2C
     case BLE_REQ_EVENAI = 0x4E
