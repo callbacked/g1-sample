@@ -1,4 +1,4 @@
-# G1 Sample Project
+# G1 iOS Sample Project
 
 This project is a Swift-based application built using **UIKit** and **Combine**. It demonstrates how to connect the G1 glasses from **Even Realities** with an iPhone. The sample app showcases Bluetooth communication handling to retrieve voice data from the G1 glasses and display the resulting text on the AR glasses.
 
