@@ -8,9 +8,9 @@
   <img src="https://github.com/callbacked/g1-sample/blob/main/screenshots/IMG_0984.PNG?raw=true" width="200" />
   <img src="https://github.com/callbacked/g1-sample/blob/main/screenshots/IMG_0985.PNG?raw=true" width="200" />
 </p>
-This project is a fork based off of the G1Sample Project by @FilipposPirpilidis for the Even Realities G1 Glasses
 
-  
+This project is a fork based off of the G1Sample Project by @FilipposPirpilidis for the Even Realities G1 Glasses.
+
 
 **BIG GIANT DISCLAIMER:** I am not an iOS dev, this is my first time working with Swift because I wanted to use the speech recognition api, so fair warning to anyone who wants to see and modify the awful code I wrote with some assistance from AI. 
 
