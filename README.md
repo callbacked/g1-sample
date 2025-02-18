@@ -27,11 +27,18 @@ This project was more to see how much of the glasses functionality can be implem
   
 
 -  **Bluetooth Communication**: Seamlessly connects the G1 glasses to an iPhone using Bluetooth.
+
 -  **Voice-to-Text Processing**: Retrieves voice data from the G1 glasses and converts it into text to query an AI model from your own supplied OpenAI Compatible API
+
 -  **Battery Monitoring**: Monitors the battery level of the G1 glasses and displays it on screen (in full mode).
+
 -  **Weather API Integration**: Retrieves weather data from Open-Meteo's free API based on the users current location.
--  **App Controls**: Allows the user to control the glasses from the app to change the dashboard mode, adjust dashboard positioning, and adjust the brightness level.
+
+-  **App Controls**: Allows the user to control the glasses from the app to change the dashboard mode, adjust dashboard positioning, head up tilt angle adjustment, brightness level adjustment (with auto as an option).
+	- note: distance adjustment does not work 
+
 -  **Quick Notes**: Allows the user to add quick notes to the glasses from the app.
+
 -  **Wake Word Detection**: Turns on the microphone every 30 seconds to listen to a user's wake word to activate the AI.
 
 	-- to use it, you enable it in the app settings and then tilt your head up to engage the dashboard and say "Hey Jarvis". It is very inconsistent to get the microphone to engage so it may take a couple tries.
