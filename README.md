@@ -48,7 +48,14 @@ This project was more to see how much of the glasses functionality can be implem
 
 ---
 
-  
+## What Doesn't Work
+
+-  **Distance Adjustment**: The distance adjustment feature does not work as I can't figure out the correct command to send to the G1 glasses to adjust the distance.
+
+- **Touchpad Gestures**: The touchpad gestures like holding down the left side to engage the default Even AI app and holding down the right side to engage quick notes does not do anything, it still has the same default behavior
+
+- **Changing Widgets**: As of right now, only the quick note widget is available to use.
+
 
 ## Requirements
 
