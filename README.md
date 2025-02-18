@@ -38,7 +38,7 @@ This project was more to see how much of the glasses functionality can be implem
 
 -  **Wake Word Detection**: Turns on the microphone every 30 seconds to listen to a user's wake word to activate the AI.
 
--- to use it, you enable it in the app settings and then tilt your head up to engage the dashboard and say "Hey Jarvis"
+	-- to use it, you enable it in the app settings and then tilt your head up to engage the dashboard and say "Hey Jarvis". It is very inconsistent to get the microphone to engage so it may take a couple tries.
 
   
   
@@ -93,8 +93,7 @@ This project was more to see how much of the glasses functionality can be implem
 A lot of the glasses functionality was mapped out by those reverse engineering the g1 glasses. I would like to thank them for their work, as I would not have come close to finishing this without
 their insights. Additionally, I would like to thank those who put these insights into practice by building libraries and apps out of them for us to draw inspiration from.
 
-https://github.com/emingenc/even_glasses 
-https://github.com/emingenc/g1_flutter_blue_plus/tree/main 
-https://github.com/NyasakiAT/G1-Navigate 
-https://github.com/meyskens/fahrplan
-
+ - https://github.com/emingenc/even_glasses
+ - https://github.com/emingenc/g1_flutter_blue_plus/
+ - https://github.com/NyasakiAT/G1-Navigate
+ - https://github.com/meyskens/fahrplan
