@@ -12,9 +12,9 @@ This project is a fork based off of the G1Sample Project by @FilipposPirpilidis 
 
   
 
-BIG GIANT DISCLAIMER: I am not an iOS dev, this is my first time working with Swift because I wanted to use the speech recognition api, so fair warning to anyone who wants to see and modify the awful code I wrote with some assistance from AI.
+**BIG GIANT DISCLAIMER:** I am not an iOS dev, this is my first time working with Swift because I wanted to use the speech recognition api, so fair warning to anyone who wants to see and modify the awful code I wrote with some assistance from AI. 
 
-This project was more to see how much of the glasses functionality can be implemented without an SDK.
+This project was more to see how much of the glasses functionality can be implemented without an SDK. Not a polished app by any means.
 
   
 
@@ -27,15 +27,11 @@ This project was more to see how much of the glasses functionality can be implem
   
 
 -  **Bluetooth Communication**: Seamlessly connects the G1 glasses to an iPhone using Bluetooth.
-
 -  **Voice-to-Text Processing**: Retrieves voice data from the G1 glasses and converts it into text to query an AI model from your own supplied OpenAI Compatible API
-
 -  **Battery Monitoring**: Monitors the battery level of the G1 glasses and displays it on screen (in full mode).
-
+-  **Weather API Integration**: Retrieves weather data from Open-Meteo's free API based on the users current location.
 -  **App Controls**: Allows the user to control the glasses from the app to change the dashboard mode, adjust dashboard positioning, and adjust the brightness level.
-
 -  **Quick Notes**: Allows the user to add quick notes to the glasses from the app.
-
 -  **Wake Word Detection**: Turns on the microphone every 30 seconds to listen to a user's wake word to activate the AI.
 
 	-- to use it, you enable it in the app settings and then tilt your head up to engage the dashboard and say "Hey Jarvis". It is very inconsistent to get the microphone to engage so it may take a couple tries.
