@@ -41,7 +41,7 @@ This project was more to see how much of the glasses functionality can be implem
 
 -  **Wake Word Detection**: Turns on the microphone every 30 seconds to listen to a user's wake word to activate the AI.
 
-	-- to use it, you enable it in the app settings and then tilt your head up to engage the dashboard and say "Hey Jarvis". It is very inconsistent to get the microphone to engage so it may take a couple tries.
+	-- to use it, you enable it in the app settings and then tilt your head up to engage the dashboard and say "Hey Jarvis". It is very inconsistent to get the microphone to engage so it may take a couple tries. In theory if improved upon, it could open up to be used for voice based controls.
 
   
   
