@@ -13,4 +13,8 @@ enum Commands: UInt8 {
     case BLE_REQ_TRANSFER_MIC_DATA = 0xF1
     case BLE_REQ_DEVICE_ORDER = 0xF5
     case BLE_REQ_MIC_ON = 0x0E
+    case QUICK_NOTE_ADD = 0x1E
+    case BATTERY_STATUS = 0x2D
+    case BRIGHTNESS = 0x01
+    case SILENT_MODE = 0x03
 }

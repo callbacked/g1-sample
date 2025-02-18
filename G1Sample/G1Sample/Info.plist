@@ -24,6 +24,13 @@
 		<string>audio</string>
 		<string>fetch</string>
 		<string>bluetooth-central</string>
+		<string>location</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to provide accurate weather information for your area.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>We need your location to provide accurate weather information for your area, even when the app is in the background.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>We need your location to provide accurate weather information for your area, even when the app is in the background.</string>
 </dict>
 </plist>

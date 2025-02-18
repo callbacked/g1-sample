@@ -1,14 +1,21 @@
 # G1 iOS Sample Project
 
-This project is a Swift-based application built using **UIKit** and **Combine**. It demonstrates how to connect the G1 glasses from **Even Realities** with an iPhone. The sample app showcases Bluetooth communication handling to retrieve voice data from the G1 glasses and display the resulting text on the AR glasses.
+This project is a fork based off of the G1Sample Project by @FilipposPirpilidis for the Even Realities G1 Glasses
+
+BIG GIANT DISCLAIMER: I am not an iOS dev, this is my first time working with Swift because I wanted to use the speech recognition api, so fair warning to anyone who wants to see and modify the awful code I wrote with some assistance from AI.
 
 ---
 
 ## Features
 
 - **Bluetooth Communication**: Seamlessly connects the G1 glasses to an iPhone using Bluetooth.
-- **Voice-to-Text Processing**: Retrieves voice data from the G1 glasses and converts it into text.
-- **AR Glasses Integration**: Sends the processed text to the G1 glasses for display.
+- **Voice-to-Text Processing**: Retrieves voice data from the G1 glasses and converts it into text to query an AI model from your own supplied OpenAI Compatible API
+- **Battery Monitoring**: Monitors the battery level of the G1 glasses and displays it on screen (in full mode).
+- **App Controls**: Allows the user to control the glasses from the app to change the dashboard mode, adjust dashboard positioning, and adjust the brightness level.
+- **Quick Notes**: Allows the user to add quick notes to the glasses from the app.
+- **Wake Word Detection**: Turns on the microphone every 30 seconds to listen to a user's wake word to activate the AI.
+-- to use it, you enable it in the app settings and then tilt your head up to engage the dashboard and say "Hey Jarvis"
+
 
 ---
 
@@ -16,7 +23,7 @@ This project is a Swift-based application built using **UIKit** and **Combine**.
 
 - **iOS 13.0** or later
 - Xcode 14 or later
-- G1 glasses from Even Realities
+- G1 glasses from Even Realities (Works on firmware 1.5 as of writing this)
 
 ---
 
@@ -30,4 +37,6 @@ This project is a Swift-based application built using **UIKit** and **Combine**.
 ---
 
 ## Setup Instructions
-
+1. Clone Repo
+2. Open the G1Sample.xcodeproj file in Xcode
+3. Hit the play button to build and run

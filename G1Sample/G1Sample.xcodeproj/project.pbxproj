@@ -150,7 +150,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7Y8F5YXHV9;
+				DEVELOPMENT_TEAM = SSK4S48FHT;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = G1Sample/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app requires Bluetooth access to connect to nearby devices.";
@@ -182,7 +182,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 7Y8F5YXHV9;
+				DEVELOPMENT_TEAM = SSK4S48FHT;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = G1Sample/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app requires Bluetooth access to connect to nearby devices.";

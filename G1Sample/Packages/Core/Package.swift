@@ -13,7 +13,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/SVProgressHUD/SVProgressHUD.git", from: "2.2.5")
+        .package(url: "https://github.com/SVProgressHUD/SVProgressHUD", .upToNextMajor(from: "2.3.1"))
     ],
     targets: [
         .target(
