@@ -3,7 +3,7 @@
 
 
 <p float="left">
-  <img src="https://github.com/callbacked/g1-sample/blob/main/screenshots/IMG_0979.PNG?raw=true" width="200" />
+  <img src="https://github.com/callbacked/g1-sample/blob/main/screenshots/IMG_95220C2ACE28-1.jpeg?raw=true" width="200" />
   <img src="https://github.com/callbacked/g1-sample/blob/main/screenshots/IMG_0983.PNG?raw=true" width="200" /> 
   <img src="https://github.com/callbacked/g1-sample/blob/main/screenshots/IMG_0984.PNG?raw=true" width="200" />
   <img src="https://github.com/callbacked/g1-sample/blob/main/screenshots/IMG_0985.PNG?raw=true" width="200" />
