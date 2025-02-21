@@ -14,7 +14,7 @@ This project is a fork based off of the G1Sample Project by @FilipposPirpilidis 
 
 **BIG GIANT DISCLAIMER:** I am not an iOS dev, this is my first time working with Swift because I wanted to use the speech recognition api, so fair warning to anyone who wants to see and modify the awful code I wrote with some assistance from AI. 
 
-This project was more to see how much of the glasses functionality can be implemented without an SDK. Not a polished app by any means.
+This project was more to see how much of the glasses functionality can be implemented without an SDK. Not a polished app by any means. This is a proof of concept if anything -- expect bugs.
 
   
 
@@ -43,6 +43,8 @@ This project was more to see how much of the glasses functionality can be implem
 
 	-- to use it, you enable it in the app settings and then tilt your head up to engage the dashboard and say "Hey Jarvis". It is very inconsistent to get the microphone to engage so it may take a couple tries. In theory if improved upon, it could open up to be used for voice based controls.
 
+- **Translation**: Allows the user to translate text from one language to another using an open endpoint in Google's Translate API. This endpoint can close at any time so it should not be relied on. 
+Ideally, for production use we would use an actual API for translation. 
   
   
 
