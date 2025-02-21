@@ -117,11 +117,20 @@ public final class G1Controller: NSObject {
         // Load other settings
         self.useFahrenheit = G1SettingsManager.shared.useFahrenheit
         self.use24Hour = G1SettingsManager.shared.use24Hour
+        self.isContinuousListening = G1SettingsManager.shared.continuousListeningEnabled
         
         super.init()
         handleRecogizerReady()
         handleReady()
         handleBatteryUpdates()
+        
+        // Initialize continuous listening state if enabled
+        if self.isContinuousListening {
+            print("Initializing continuous listening from saved state")
+            speechRecognizer.startWakeWordDetection()
+            // Ensure the state is properly set in the bluetooth manager
+            bluetoothManager.updateVoiceState(.listening)
+        }
     }
 
     public func configureOpenAI(apiKey: String, baseURL: String? = nil, model: String? = nil) {
@@ -443,6 +452,25 @@ public final class G1Controller: NSObject {
         bluetoothManager.$g1Ready.sink { [weak self] ready in
             guard let self = self else { return }
             self.g1Connected = ready
+            
+            // Initialize continuous listening mode if it was enabled
+            if ready && self.isContinuousListening {
+                Task {
+                    print("G1 ready, initializing continuous listening mode")
+                    // Ensure voice state is set before starting
+                    self.bluetoothManager.updateVoiceState(.listening)
+                    // Start wake word detection
+                    self.speechRecognizer.startWakeWordDetection()
+                    // Send initial mic on command
+                    if let rightGlass = self.rightPeripheral,
+                       let rightTxChar = self.findCharacteristic(uuid: self.UART_TX_CHAR_UUID, peripheral: rightGlass) {
+                        var micOnData = Data()
+                        micOnData.append(Commands.BLE_REQ_MIC_ON.rawValue)
+                        micOnData.append(0x01)
+                        rightGlass.writeValue(micOnData, for: rightTxChar, type: .withResponse)
+                    }
+                }
+            }
         }
         .store(in: &cancellables)
     }
@@ -465,28 +493,66 @@ public final class G1Controller: NSObject {
     private func handlePreviewText() {
         speechRecognizer.$previewText
             .dropFirst() // Skip initial value
-            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
+            .debounce(for: .milliseconds(700), scheduler: DispatchQueue.main)
             .sink { [weak self] text in
                 guard let self = self, !text.isEmpty, text != "Listening..." else { return }
                 Task {
-                    // Build command with proper flags for direct text display
-                    let displayText = "Listening...\n\n\(text)"
-                    guard let textData = displayText.data(using: .utf8) else { return }
-                    
-                    var command: [UInt8] = [
-                        0x4E,           // SEND_RESULT command
-                        0x00,           // sequence number
-                        0x01,           // total packages
-                        0x00,           // current package
-                        0x71,           // screen status (0x70 Text Show | 0x01 New Content)
-                        0x00,           // char position 0
-                        0x00,           // char position 1
-                        0x01,           // page number
-                        0x01            // max pages
-                    ]
-                    command.append(contentsOf: Array(textData))
-                    
-                    await self.g1Manager.sendCommand(command)
+                    if self.g1Manager.currentMode == .translation {
+                        // In translation mode, wait for translation before showing either text
+                        print("Translating text: \(text)")
+                        if let translatedText = await self.translateText(text) {
+                            print("Translation received: \(translatedText)")
+                            
+                            // Send both texts together with proper delays
+                            // First send original text command
+                            var originalCommand = Data([Commands.TRANSLATE_ORIGINAL.rawValue])
+                            originalCommand.append(UInt8(self.getNextSequence() & 0xFF))
+                            originalCommand.append(0x01) // Total packages
+                            originalCommand.append(0x00) // Current package
+                            originalCommand.append(0x00) // Reserved
+                            originalCommand.append(0x00) // Reserved
+                            originalCommand.append(0x20) // Status
+                            originalCommand.append(0x0D) // Reserved
+                            originalCommand.append(contentsOf: text.data(using: .utf8) ?? Data())
+                            await self.g1Manager.sendCommand(Array(originalCommand))
+                            
+                            try? await Task.sleep(nanoseconds: 300 * 1_000_000) // 300ms delay
+                            
+                            // Then send translated text command
+                            var translatedCommand = Data([Commands.TRANSLATE_TRANSLATED.rawValue])
+                            translatedCommand.append(UInt8(self.getNextSequence() & 0xFF))
+                            translatedCommand.append(0x01) // Total packages
+                            translatedCommand.append(0x00) // Current package
+                            translatedCommand.append(0x00) // Reserved
+                            translatedCommand.append(0x00) // Reserved
+                            translatedCommand.append(0x20) // Status
+                            translatedCommand.append(0x0D) // Reserved
+                            translatedCommand.append(contentsOf: translatedText.data(using: .utf8) ?? Data())
+                            await self.g1Manager.sendCommand(Array(translatedCommand))
+                            
+                            // Add delay after sending both commands
+                            try? await Task.sleep(nanoseconds: 300 * 1_000_000) // 300ms delay
+                        }
+                    } else {
+                        // In normal mode, show preview text
+                        let displayText = "Listening...\n\n\(text)"
+                        guard let textData = displayText.data(using: .utf8) else { return }
+                        
+                        var command: [UInt8] = [
+                            0x4E,           // SEND_RESULT command
+                            0x00,           // sequence number
+                            0x01,           // total packages
+                            0x00,           // current package
+                            0x71,           // screen status (0x70 Text Show | 0x01 New Content)
+                            0x00,           // char position 0
+                            0x00,           // char position 1
+                            0x01,           // page number
+                            0x01            // max pages
+                        ]
+                        command.append(contentsOf: Array(textData))
+                        
+                        await self.g1Manager.sendCommand(command)
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -498,7 +564,7 @@ public final class G1Controller: NSObject {
             
             // Ensure we have enough data to process
             guard data.count > 2 else { 
-                print("Received invalid PCM data size: \(data.count)")
+                //print("Received invalid PCM data size: \(data.count)")
                 return 
             }
             
@@ -507,7 +573,7 @@ public final class G1Controller: NSObject {
             
             // Ensure we have valid PCM data
             guard effectiveData.count > 0 else {
-                print("No PCM data after removing command bytes")
+                //print("No PCM data after removing command bytes")
                 return
             }
             
@@ -516,7 +582,7 @@ public final class G1Controller: NSObject {
             
             // Only log and process if we have valid PCM data
             if pcmData.count > 0 {
-                print("Processing PCM data of size: \(pcmData.count)")
+                //print("Processing PCM data of size: \(pcmData.count)")
                 self.speechRecognizer.appendPCMData(pcmData as Data)
             } else {
                 print("PCM conversion resulted in empty data")
@@ -531,7 +597,16 @@ public final class G1Controller: NSObject {
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] text in
                 guard let self = self, !text.isEmpty else { return }
-                self.processWithOpenAI(text: text)
+                
+                print("Recognized text received: \(text)")
+                
+                // Only process with AI if we're not in translation mode
+                if self.g1Manager.currentMode != .translation {
+                    print("Processing text with AI: \(text)")
+                    self.processWithOpenAI(text: text)
+                } else {
+                    print("Skipping AI processing - in translation mode")
+                }
             }
             .store(in: &cancellables)
     }
@@ -837,10 +912,15 @@ public final class G1Controller: NSObject {
             return false
         }
         
-        isContinuousListening = !isContinuousListening
+        // Update state before taking action
+        let wasEnabled = isContinuousListening
+        isContinuousListening = !wasEnabled
         G1SettingsManager.shared.continuousListeningEnabled = isContinuousListening
         
         if isContinuousListening {
+            // Start wake word detection if not already running
+            speechRecognizer.startWakeWordDetection()
+            
             // Create a repeating task for wake word detection
             Task {
                 while isContinuousListening {
@@ -850,9 +930,6 @@ public final class G1Controller: NSObject {
                     micOnData.append(0x01)
                     rightGlass.writeValue(micOnData, for: rightTxChar, type: .withResponse)
                     print("Starting wake word detection cycle")
-                    
-                    // Start wake word detection
-                    speechRecognizer.startWakeWordDetection()
                     
                     // Wait for 30 seconds
                     try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
@@ -864,9 +941,6 @@ public final class G1Controller: NSObject {
                         micOffData.append(0x00)
                         rightGlass.writeValue(micOffData, for: rightTxChar, type: .withResponse)
                         print("Ending wake word detection cycle")
-                        
-                        // Stop wake word detection
-                        speechRecognizer.stopWakeWordDetection()
                         
                         // Small delay before next cycle
                         try? await Task.sleep(nanoseconds: 100 * 1_000_000)
@@ -883,6 +957,7 @@ public final class G1Controller: NSObject {
             
             // Stop any ongoing recognition without triggering AI
             speechRecognizer.stopWakeWordDetection()
+            speechRecognizer.stopRecognition()
             
             // Reset any ongoing states
             bluetoothManager.aiMode = .AI_IDLE
@@ -905,6 +980,226 @@ public final class G1Controller: NSObject {
 
     public func setTiltAngle(_ degrees: UInt8) async -> Bool {
         return await g1Manager.setTiltAngle(degrees)
+    }
+
+    public func restartWakeWordDetection() {
+        // Only restart if we're in continuous mode
+        guard isContinuousListening else { return }
+        
+        print("Restarting wake word detection")
+        speechRecognizer.stopRecognition() // Stop any ongoing recognition
+        speechRecognizer.startWakeWordDetection() // Start wake word detection
+    }
+
+    public func startLiveTranslation() async -> Bool {
+        // Get the selected input language from UserDefaults
+        guard let inputLangCode = UserDefaults.standard.string(forKey: "selectedInputLanguage") else {
+            return false
+        }
+        
+        print("Starting translation with input language code: \(inputLangCode)")
+        
+        // First hide dashboard and exit all functions
+        await g1Manager.hideDashboard()
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000) // 100ms delay
+        await g1Manager.sendCommand([Commands.BLE_EXIT_ALL_FUNCTIONS.rawValue])
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000) // 100ms delay
+        
+        // Map the locale code to TranslateLanguage
+        let inputLang: TranslateLanguage
+        switch inputLangCode {
+        case "zh-CN":
+            inputLang = .chinese
+        case "zh-HK", "yue-CN":
+            inputLang = .cantonese
+        case "en-US", "en-GB", "en-AU", "en-CA", "en-IN":
+            inputLang = .english
+        case "ja-JP":
+            inputLang = .japanese
+        case "ko-KR":
+            inputLang = .korean
+        case "fr-FR", "fr-CA":
+            inputLang = .french
+        case "de-DE":
+            inputLang = .german
+        case "it-IT":
+            inputLang = .italian
+        case "ru-RU":
+            inputLang = .russian
+        case "ar-SA":
+            inputLang = .arabic
+        case "tr-TR":
+            print("Turkish input not supported in TranslateLanguage enum, falling back to English")
+            inputLang = .english
+        case "pt-BR":
+            print("Portuguese input not supported in TranslateLanguage enum, falling back to English")
+            inputLang = .english
+        case "es-ES", "es-MX", "es-US", "es-419":
+            print("Spanish input not supported in TranslateLanguage enum, falling back to English")
+            inputLang = .english
+        default:
+            print("Unknown language code \(inputLangCode), falling back to English")
+            inputLang = .english
+        }
+
+        print("Mapped input language code \(inputLangCode) to TranslateLanguage: \(String(describing: inputLang))")
+
+        // Get the selected target language from UserDefaults, default to French
+        let targetLangRaw = UserDefaults.standard.integer(forKey: "selectedTranslationLanguage")
+        let targetLang = TranslateLanguage(rawValue: UInt8(targetLangRaw)) ?? .french
+        
+        print("Starting translation from \(inputLang) to \(targetLang)")
+        
+        // Start translation mode with selected languages
+        let success = await g1Manager.startTranslation(from: inputLang, to: targetLang)
+        if !success {
+            print("Failed to start translation mode")
+            return false
+        }
+        
+        // If in continuous mode, stop wake word detection first
+        if isContinuousListening {
+            speechRecognizer.stopWakeWordDetection()
+        }
+        
+        // Turn on microphone and start voice recording
+        if let rightPeripheral = rightPeripheral,
+           let txChar = findCharacteristic(uuid: UART_TX_CHAR_UUID, peripheral: rightPeripheral) {
+            let micCommand = Data([Commands.BLE_REQ_MIC_ON.rawValue, 0x01])
+            rightPeripheral.writeValue(micCommand, for: txChar, type: .withResponse)
+            print("Starting microphone for translation mode")
+        }
+        
+        // Start voice recognition
+        g1Manager.updateVoiceState(.listening)
+        speechRecognizer.startRecognition()
+        return true
+    }
+
+    private func translateText(_ text: String) async -> String? {
+        // Get the selected target language from UserDefaults, default to French
+        let targetLangRaw = UserDefaults.standard.integer(forKey: "selectedTranslationLanguage")
+        let targetLang = TranslateLanguage(rawValue: UInt8(targetLangRaw)) ?? .french
+        
+        // Get the selected language name to differentiate between Spanish variants
+        let targetLangName = UserDefaults.standard.string(forKey: "selectedTranslationLanguageName")
+        
+        // Map language enum to ISO code
+        let targetCode: String
+        switch targetLang {
+        case .chinese:
+            targetCode = "zh"
+        case .english:
+            targetCode = "en"
+        case .japanese:
+            targetCode = "ja"
+        case .korean:
+            targetCode = "ko"
+        case .french:
+            targetCode = "fr"
+        case .german:
+            targetCode = "de"
+        case .spanish:
+            // Use different codes based on the variant
+            if targetLangName == "Spanish (Latin America)" {
+                targetCode = "es-419"
+            } else {
+                targetCode = "es" // Default to Spain Spanish
+            }
+        case .russian:
+            targetCode = "ru"
+        case .dutch:
+            targetCode = "nl"
+        case .norwegian:
+            targetCode = "no"
+        case .danish:
+            targetCode = "da"
+        case .swedish:
+            targetCode = "sv"
+        case .finnish:
+            targetCode = "fi"
+        case .italian:
+            targetCode = "it"
+        case .arabic:
+            targetCode = "ar"
+        case .hindi:
+            targetCode = "hi"
+        case .bengali:
+            targetCode = "bn"
+        case .cantonese:
+            targetCode = "zh-HK"  // Special case for Cantonese
+        }
+        
+        print("Translating to language code: \(targetCode)")  // Add debug logging
+        // Google Translate API endpoint found here https://github.com/ssut/py-googletrans/issues/268#issuecomment-2647612796 
+        let url = URL(string: "https://translate-pa.googleapis.com/v1/translateHtml")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("AIzaSyATBXajvzQLTDHEQbcpq0Ihe0vWDHmO520", forHTTPHeaderField: "X-Goog-API-Key") // this is google's api key not mine don't worry
+        request.setValue("application/json+protobuf", forHTTPHeaderField: "Content-Type")
+        
+        // Format request body with dynamic target language code
+        let requestBody = "[[[\"\(text.replacingOccurrences(of: "\"", with: "\\\""))\"],\"auto\",\"\(targetCode)\"],\"wt_lib\"]"
+        request.httpBody = requestBody.data(using: .utf8)
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            if let responseStr = String(data: data, encoding: .utf8) {
+                // Parse response: [["translated text"],["source_lang"]]
+                if let translatedText = responseStr.components(separatedBy: "[[\"").last?
+                    .components(separatedBy: "\"],").first {
+                    // Clean up any remaining JSON artifacts
+                    return translatedText
+                        .replacingOccurrences(of: "]]", with: "")
+                        .replacingOccurrences(of: "\"", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+        } catch {
+            print("Translation error: \(error)")
+        }
+        return nil
+    }
+
+    public func stopLiveTranslation() async {
+        // Turn off microphone
+        if let rightPeripheral = rightPeripheral,
+           let txChar = findCharacteristic(uuid: UART_TX_CHAR_UUID, peripheral: rightPeripheral) {
+            let micCommand = Data([Commands.BLE_REQ_MIC_ON.rawValue, 0x00])
+            rightPeripheral.writeValue(micCommand, for: txChar, type: .withResponse)
+            print("Stopping microphone for translation mode")
+        }
+        
+        // Stop voice recognition
+        g1Manager.updateVoiceState(.idle)
+        speechRecognizer.stopRecognition()
+        
+        // If we were in continuous mode, restart wake word detection
+        if isContinuousListening {
+            speechRecognizer.startWakeWordDetection()
+        }
+        
+        // Stop translation mode
+        await g1Manager.stopTranslation()
+    }
+
+    public func updateSpeechRecognitionLanguage(_ languageCode: String) {
+        // Stop any ongoing recognition
+        speechRecognizer.stopRecognition()
+        
+        // Create new locale and update recognizer
+        let locale = Locale(identifier: languageCode)
+        speechRecognizer.updateRecognizer(locale: locale)
+        
+        // If we're in continuous mode, restart wake word detection
+        if isContinuousListening {
+            speechRecognizer.startWakeWordDetection()
+        } else if g1Manager.currentMode == .translation {
+            // If we're in translation mode, restart recognition
+            speechRecognizer.startRecognition()
+        }
+        
+        print("Updated speech recognition language to: \(languageCode)")
     }
 }
 

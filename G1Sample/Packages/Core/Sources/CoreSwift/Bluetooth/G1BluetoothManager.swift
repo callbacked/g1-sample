@@ -33,10 +33,20 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
         }
     }
     @Published public var voiceData: Data = Data()
-    @Published public var aiListening: Bool = false
+    @Published private(set) var voiceState: VoiceState = .idle
+    @Published private(set) var aiState: AiState = .idle
+    @Published public var aiListening: Bool = false {
+        didSet {
+            // Keep aiListening in sync with voice state for backward compatibility
+            if aiListening && voiceState == .idle {
+                voiceState = .listening
+            } else if !aiListening && voiceState == .listening {
+                voiceState = .idle
+            }
+        }
+    }
     @Published public private(set) var quickNotes: [QuickNote] = [] {
         didSet {
-            // Persist quick notes whenever they change
             G1SettingsManager.shared.quickNotes = quickNotes
         }
     }
@@ -45,6 +55,7 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
     @Published public var leftBatteryLevel: Int = 0
     @Published public var rightBatteryLevel: Int = 0
     @Published public var currentDashboardMode: DashboardMode = .full
+    @Published public var currentMode: GlassesMode = .normal
     
     public enum AiMode: String {
         case AI_REQUESTED
@@ -100,6 +111,8 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
     // Add tilt command constant
     private let TILT_ANGLE_COMMAND: UInt8 = 0x0B
     
+    private var translateSeq: UInt8 = 0
+    
     override init() {
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: G1BluetoothManager._bluetoothQueue)
@@ -132,13 +145,13 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
         let backgroundQueue = DispatchQueue(label: "com.sample.aiTriggerTimerQueue", qos: .default)
         
         backgroundQueue.async { [weak self] in
-            self?.aiTriggerTimeoutTimer = Timer(timeInterval: 15.0, repeats: false) { [weak self] _ in
+            let timer = Timer(timeInterval: 15.0, repeats: false) { [weak self] _ in
                 guard let self = self else { return }
                 guard let rightPeripheral = self.rightPeripheral else { return }
                 
-                // Only stop mic if we're in AI mode and not already stopping
-                if self.aiMode == .AI_MIC_ON {
-                    print("AI Timeout - Turning off microphone")
+                // Only stop if we're still in listening state and not in continuous mode
+                if self.voiceState == .listening && !G1Controller.shared.isContinuousListening {
+                    print("Voice timeout - Turning off microphone")
                     self.sendMicOn(to: rightPeripheral, isOn: false)
                     
                     if let leftChar = self.getWriteCharacteristic(for: self.leftPeripheral),
@@ -146,11 +159,16 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
                         self.exitAllFunctions(to: self.leftPeripheral!, characteristic: leftChar)
                         self.exitAllFunctions(to: rightPeripheral, characteristic: rightChar)
                     }
-                    self.aiMode = .AI_IDLE
+                    self.voiceState = .idle
+                    self.aiState = .idle
+                    self.aiListening = false
+                } else if G1Controller.shared.isContinuousListening {
+                    print("Ignoring voice timeout in continuous listening mode")
                 }
             }
             
-            RunLoop.current.add((self?.aiTriggerTimeoutTimer)!, forMode: .default)
+            self?.aiTriggerTimeoutTimer = timer
+            RunLoop.current.add(timer, forMode: .default)
             RunLoop.current.run()
         }
     }
@@ -227,18 +245,9 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
     private func handleNotification(from peripheral: CBPeripheral, data: Data) {
         guard let command = data.first else { return }
         
-        // Log the full command data for debugging
-        print("Received command: \(data.map { String(format: "%02X", $0) }.joined(separator: " "))")
+        //print("Received command: \(data.map { String(format: "%02X", $0) }.joined(separator: " "))")
         
-        if command == INIT_COMMAND && data.count > 1 {
-            let success = data[1] == RESPONSE_SUCCESS
-            handleInitResponse(from: peripheral, success: success)
-            return
-        }
-        
-        // Handle battery stuff 
-        // G1 BATTERY SPECS:
-        // ZWD400923H - 800mAh battery 0.308Wh 3.85V from FCC teardown pic
+        // Handle battery status command separately as it's not in the Commands enum
         if command == 0x2C && data.count >= 2 && data[1] == 0x66 {
             if data.count >= 6 {
                 let batteryPercent = Int(data[2])
@@ -248,9 +257,9 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
                 let rawVoltage = (voltageHigh << 8) | voltageLow
                 let voltage = rawVoltage / 10  // Scale down by 10 to get actual millivolts
                 
-                print("Raw battery data - Battery: \(batteryPercent)%, Voltage: \(voltage)mV, Flags: 0x\(String(format: "%02X", flags))") 
+                print("Raw battery data - Battery: \(batteryPercent)%, Voltage: \(voltage)mV, Flags: 0x\(String(format: "%02X", flags))")
                 
-                // if left, update left battery level, if right, update right battery level
+                // Update battery level for the appropriate side
                 if peripheral == leftPeripheral {
                     leftBatteryLevel = batteryPercent
                     print("Left glass battery: \(batteryPercent)%")
@@ -259,7 +268,7 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
                     print("Right glass battery: \(batteryPercent)%")
                 }
                 
-                // update the main battery level as the lower of the two
+                // Update the main battery level as the lower of the two
                 batteryLevel = min(leftBatteryLevel, rightBatteryLevel)
             }
             return
@@ -270,65 +279,53 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
             case .BLE_REQ_MIC_ON:
                 let acknowledge = CommandResponse(rawValue: data[1])
                 if acknowledge == .ACK {
-                    if aiMode == .AI_REQUESTED && !G1Controller.shared.isContinuousListening {
-                        aiMode = .AI_MIC_ON
-                        print("Microphone turned on successfully")
-                    } else {
-                        print("Microphone turned on in continuous listening mode")
-                    }
+                    //print("Microphone command acknowledged")
                 } else {
-                    print("Microphone activation failed")
-                    aiMode = .AI_IDLE
+                    //print("Microphone command failed")
+                    voiceState = .idle
+                    aiState = .idle
+                    aiListening = false
                 }
             case .BLE_REQ_TRANSFER_MIC_DATA:
-                if data.count > 2 && (aiMode == .AI_MIC_ON || G1Controller.shared.isContinuousListening) {
-                    // Only publish the PCM data, let G1Controller handle the logging
-                    self.voiceData = data
-                } else if data.count > 2 {
-                    print("Received PCM data in wrong state: \(aiMode), continuous listening: \(G1Controller.shared.isContinuousListening)")
+                let isContinuousEnabled = G1SettingsManager.shared.continuousListeningEnabled
+                if data.count > 2 {
+                    if voiceState == .listening || isContinuousEnabled {
+                        // Always publish PCM data in continuous listening mode or when voice is active
+                        self.voiceData = data
+                        
+                        // In continuous mode, ensure microphone stays on
+                        if isContinuousEnabled {
+                            if let rightPeripheral = self.rightPeripheral,
+                               let txChar = findCharacteristic(uuid: UART_TX_CHAR_UUID, peripheral: rightPeripheral) {
+                                let micCommand = Data([Commands.BLE_REQ_MIC_ON.rawValue, 0x01])
+                                rightPeripheral.writeValue(micCommand, for: txChar, type: .withResponse)
+                               //print("Maintaining microphone state in continuous mode")
+                            }
+                        }
+                    } else {
+                        print("Received PCM data in wrong state: voice=\(voiceState), ai=\(aiState), continuous=\(isContinuousEnabled)")
+                    }
                 }
             case .BLE_REQ_DEVICE_ORDER:
                 print("Received device order: \(data.subdata(in: 1..<data.count).hexEncodedString())")
                 if let order = DeviceOrders(rawValue: data[1]) {
                     switch order {
-                    case .DISPLAY_READY:
-                        self.responseModel = nil
                     case .TRIGGER_FOR_AI:
-                        if let rightPeripheral {
-                            // Only proceed if we're in a valid state to start AI
-                            if !g1Ready {
-                                print("Cannot start AI - glasses not ready")
-                                return
+                        Task {
+                            if await startVoiceRecording(forAI: true) {
+                                print("AI Triggered - Starting voice recording")
                             }
-                            
-                            if aiMode != .AI_IDLE {
-                                print("Cannot start AI - already in \(aiMode) mode")
-                                return
-                            }
-                            
-                            // Reset state and timers
-                            aiTriggerTimeoutTimer?.invalidate()
-                            aiTriggerTimeoutTimer = nil
-                            
-                            // Set mode before sending command to ensure proper state
-                            aiMode = .AI_REQUESTED
-                            
-                            // Send mic on command
-                            sendMicOn(to: rightPeripheral, isOn: true)
-                            print("AI Triggered - Turning on microphone")
-                            
-                            // Start timeout timer after command is sent
-                            startAITriggerTimeoutTimer()
                         }
                     case .TRIGGER_FOR_STOP_RECORDING:
-                        aiTriggerTimeoutTimer?.invalidate()
-                        aiTriggerTimeoutTimer = nil
-                        
-                        if let rightPeripheral {
-                            sendMicOn(to: rightPeripheral, isOn: false)
-                            print("Stopping AI - Turning off microphone")
+                        Task {
+                            // Only stop recording if we're not in continuous listening mode
+                            if !G1Controller.shared.isContinuousListening {
+                                await stopVoiceRecording()
+                                print("Stopping recording")
+                            } else {
+                                print("Ignoring stop recording trigger in continuous listening mode")
+                            }
                         }
-                        aiMode = .AI_IDLE
                     case .TRIGGER_CHANGE_PAGE:
                         guard var responseModel else { return }
                         print("Change Page right")
@@ -350,6 +347,26 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
                         }
                     case .G1_IS_READY:
                         g1Ready = true
+                    case .DISPLAY_READY:
+                        self.responseModel = nil
+                        if G1Controller.shared.isContinuousListening {
+                            // In continuous mode, just restart wake word detection
+                            print("Restarting wake word detection in continuous mode")
+                            G1Controller.shared.restartWakeWordDetection()
+                            
+                            // Ensure microphone stays on
+                            if let rightPeripheral = self.rightPeripheral,
+                               let txChar = findCharacteristic(uuid: UART_TX_CHAR_UUID, peripheral: rightPeripheral) {
+                                let micCommand = Data([Commands.BLE_REQ_MIC_ON.rawValue, 0x01])
+                                rightPeripheral.writeValue(micCommand, for: txChar, type: .withResponse)
+                                print("Keeping microphone on for continuous listening")
+                            }
+                        } else {
+                            // In normal mode, stop voice recording
+                            Task {
+                                await stopVoiceRecording()
+                            }
+                        }
                     }
                 }
             case .BLE_REQ_EVENAI:
@@ -884,6 +901,155 @@ public final class G1BluetoothManager: NSObject, CBCentralManagerDelegate, CBPer
         G1SettingsManager.shared.dashboardTilt = Int(clampedDegrees)
         return true
     }
+
+    private func nextTranslateSeq() -> UInt8 {
+        translateSeq += 1
+        if translateSeq > 255 {
+            translateSeq = 0
+        }
+        return translateSeq
+    }
+
+    // Translation Flow:
+    // 1. Call startTranslation() with source/target languages to initialize
+    // 2. Call sendTranslation() with original and translated text pairs
+    // 3. Sequence numbers (0-255) automatically cycle to track message order
+    // Implementation based on Fahrplan's translation code
+    public func startTranslation(from sourceLanguage: TranslateLanguage, to targetLanguage: TranslateLanguage) async -> Bool {
+        // Set mode to translation
+        currentMode = .translation
+        
+        // Setup translation mode
+        let setupCommand = Data([Commands.TRANSLATE_SETUP.rawValue, 0x05, 0x00, 0x00, 0x13])
+        await sendCommand(Array(setupCommand))
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000)
+        
+        // Start translation on right glass
+        if let rightGlass = rightPeripheral,
+           let rightTxChar = findCharacteristic(uuid: UART_TX_CHAR_UUID, peripheral: rightGlass) {
+            let startCommand = Data([Commands.TRANSLATE_START.rawValue, 0x06, 0x00, 0x00, 0x01, 0x01])
+            rightGlass.writeValue(startCommand, for: rightTxChar, type: .withResponse)
+        }
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000)
+        
+        // Configure languages
+        let configCommand = Data([Commands.TRANSLATE_CONFIG.rawValue, 0x00, sourceLanguage.rawValue, targetLanguage.rawValue])
+        await sendCommand(Array(configCommand))
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000)
+        
+        // Initialize text display for original text
+        let initOriginal = Data([Commands.TRANSLATE_ORIGINAL.rawValue, nextTranslateSeq(), 0x01, 0x00, 0x00, 0x00, 0x00, 0x0D])
+        await sendCommand(Array(initOriginal))
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000)
+        
+        // Initialize text display for translated text
+        let initTranslated = Data([Commands.TRANSLATE_TRANSLATED.rawValue, nextTranslateSeq(), 0x01, 0x00, 0x00, 0x00, 0x00, 0x0D])
+        await sendCommand(Array(initTranslated))
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000)
+        
+        return true
+    }
+    
+    public func sendTranslation(originalText: String, translatedText: String) async -> Bool {
+        guard let originalData = originalText.data(using: .utf8),
+              let translatedData = translatedText.data(using: .utf8) else {
+            return false
+        }
+        
+        // Send original text
+        var originalCommand = Data([Commands.TRANSLATE_ORIGINAL.rawValue, nextTranslateSeq(), 0x01, 0x00, 0x00, 0x00, 0x20, 0x0D])
+        originalCommand.append(originalData)
+        await sendCommand(Array(originalCommand))
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000)
+        
+        // Send translated text
+        var translatedCommand = Data([Commands.TRANSLATE_TRANSLATED.rawValue, nextTranslateSeq(), 0x01, 0x00, 0x00, 0x00, 0x20, 0x0D])
+        translatedCommand.append(translatedData)
+        await sendCommand(Array(translatedCommand))
+        
+        return true
+    }
+    // Exits the translation screen
+    public func stopTranslation() async {
+        if let rightPeripheral = rightPeripheral {
+            sendMicOn(to: rightPeripheral, isOn: false)
+        }
+        try? await Task.sleep(nanoseconds: 100 * 1_000_000)
+        await sendCommand([Commands.BLE_EXIT_ALL_FUNCTIONS.rawValue])
+        
+        // Reset mode to normal
+        currentMode = .normal
+    }
+
+    private func sendMicOn(to peripheral: CBPeripheral, isOn: Bool) {
+        if let txChar = findCharacteristic(uuid: UART_TX_CHAR_UUID, peripheral: peripheral) {
+            var command = Data()
+            command.append(Commands.BLE_REQ_MIC_ON.rawValue)
+            command.append(isOn ? 0x01 : 0x00)
+            peripheral.writeValue(command, for: txChar, type: .withResponse)
+            
+            if !isOn {
+                exitAllFunctions(to: peripheral, characteristic: txChar)
+                print("Microphone turned OFF")
+                voiceState = .idle
+                aiState = .idle
+                aiListening = false
+            } else {
+                if G1Controller.shared.isContinuousListening {
+                    print("Microphone turned ON - Continuous Listening")
+                    // Don't set voiceState to listening in continuous mode
+                    // This allows wake word detection to work without interfering with AI state
+                } else {
+                    print("Microphone turned ON - Voice Active")
+                    voiceState = .listening
+                    if aiState != .idle {
+                        aiListening = true
+                    }
+                }
+            }
+        }
+    }
+
+    public func startVoiceRecording(forAI: Bool = false) async -> Bool {
+        guard let rightPeripheral = rightPeripheral else { return false }
+        
+        if !g1Ready {
+            print("Cannot start voice recording - glasses not ready")
+            return false
+        }
+        
+        if voiceState == .listening && !G1Controller.shared.isContinuousListening {
+            print("Voice recording already active")
+            return false
+        }
+        
+        if forAI {
+            aiState = .active
+            voiceState = .listening // Set voice state to listening only when AI is active
+        }
+        
+        sendMicOn(to: rightPeripheral, isOn: true)
+        if forAI {
+            startAITriggerTimeoutTimer()
+        }
+        return true
+    }
+
+    public func stopVoiceRecording() async {
+        if let rightPeripheral = rightPeripheral {
+            sendMicOn(to: rightPeripheral, isOn: false)
+        }
+        aiTriggerTimeoutTimer?.invalidate()
+        aiTriggerTimeoutTimer = nil
+        
+        voiceState = .idle
+        aiState = .idle
+        aiListening = false
+    }
+
+    public func updateVoiceState(_ state: VoiceState) {
+        voiceState = state
+    }
 }
 
 // MARK: Commands
@@ -893,30 +1059,6 @@ extension G1BluetoothManager {
         var data = Data()
         data.append(Commands.BLE_EXIT_ALL_FUNCTIONS.rawValue)
         peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
-    }
-    
-    private func sendMicOn(to peripheral: CBPeripheral, isOn: Bool) {
-        if let txChar = findCharacteristic(uuid: UART_TX_CHAR_UUID, peripheral: peripheral) {
-            var command = Data()
-            command.append(Commands.BLE_REQ_MIC_ON.rawValue)
-            command.append(isOn ? 0x01 : 0x00)
-            peripheral.writeValue(command, for: txChar, type: .withResponse)
-            
-            if !isOn {
-                // When turning mic off, just exit all functions without changing AI mode
-                // This prevents the AI screen from appearing
-                exitAllFunctions(to: peripheral, characteristic: txChar)
-                print("Microphone turned OFF")
-            } else if G1Controller.shared.isContinuousListening {
-                // When turning mic on in continuous mode, don't set AI_MIC_ON
-                // This prevents the AI listening screen
-                print("Microphone turned ON - Waiting for wake word")
-            } else {
-                // Normal AI mode behavior
-                aiMode = .AI_MIC_ON
-                print("Microphone turned ON - Setting AI_MIC_ON state")
-            }
-        }
     }
     
     private func sendHeartbeat(to peripheral: CBPeripheral) {
@@ -964,7 +1106,7 @@ extension G1BluetoothManager {
                 remainingText = String(remainingText[endIndex...])
             }
             if !remainingText.isEmpty {
-            lines.append(remainingText)
+                lines.append(remainingText)
             }
         }
         return lines
@@ -973,14 +1115,57 @@ extension G1BluetoothManager {
     private func manualTextControl() async -> Bool {
         guard let responseModel else { return false }
         let lines = responseModel.lines
-        var start_idx = Int((responseModel.currentPage - 1) * 4)
+        let start_idx = Int((responseModel.currentPage - 1) * 4)
         let pageLines = lines[start_idx..<min(start_idx + 4, lines.count)]
         let displayText = pageLines.joined(separator: "\n")
         
         // Send text packet only once with proper synchronization
         return await sendTextPacket(displayText: displayText, newScreen: true, status: responseModel.status, currentPage: responseModel.currentPage, maxPages: responseModel.totalPages)
     }
+    
+    private func handleAICommand(peripheral: CBPeripheral, subCommand: UInt8) {
+        // Don't process AI commands that would stop recording in continuous mode
+        if G1Controller.shared.isContinuousListening && (subCommand == 0x00 || subCommand == 0x18) {
+            print("Ignoring AI exit command in continuous listening mode")
+            return
+        }
+
+        switch subCommand {
+        case 0x00:
+            print("Exit to dashboard manually")
+            if !G1Controller.shared.isContinuousListening {
+                aiMode = .AI_IDLE
+            }
+        case 0x01:
+            print("Page control")
+            if !G1Controller.shared.isContinuousListening {
+                aiMode = .AI_IDLE
+            }
+        case 0x17: // 23 in decimal
+            print("Start Even AI")
+            aiMode = .AI_REQUESTED
+        case 0x18: // 24 in decimal
+            print("Stop Even AI recording")
+            if !G1Controller.shared.isContinuousListening {
+                aiMode = .AI_IDLE
+            } else {
+                // In continuous mode, keep the mic on and restart wake word detection
+                Task {
+                    if let rightPeripheral = self.rightPeripheral,
+                       let txChar = findCharacteristic(uuid: UART_TX_CHAR_UUID, peripheral: rightPeripheral) {
+                        let micCommand = Data([Commands.BLE_REQ_MIC_ON.rawValue, 0x01])
+                        rightPeripheral.writeValue(micCommand, for: txChar, type: .withResponse)
+                        print("Keeping microphone on in continuous mode")
+                        G1Controller.shared.restartWakeWordDetection()
+                    }
+                }
+            }
+        default:
+            print("Unknown AI subcommand: \(String(format: "%02X", subCommand))")
+        }
+    }
 }
+
 // MARK: BLE Stubs
 extension G1BluetoothManager {
     
@@ -1186,25 +1371,6 @@ extension G1BluetoothManager {
         guard data.count > 0 else { return }
         
         handleNotification(from: peripheral, data: data)
-    }
-    
-    private func handleAICommand(peripheral: CBPeripheral, subCommand: UInt8) {
-        switch subCommand {
-        case 0x00:
-            print("Exit to dashboard manually")
-            aiMode = .AI_IDLE
-        case 0x01:
-            print("Page control")
-            aiMode = .AI_IDLE
-        case 0x17: // 23 in decimal
-            print("Start Even AI")
-            aiMode = .AI_REQUESTED
-        case 0x18: // 24 in decimal
-            print("Stop Even AI recording")
-            aiMode = .AI_IDLE
-        default:
-            print("Unknown AI subcommand: \(String(format: "%02X", subCommand))")
-        }
     }
     
     private func restoreSettings() async {

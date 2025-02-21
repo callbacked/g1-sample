@@ -956,6 +956,11 @@ public class StartViewController: BaseViewController<StartViewModel> {
             self?.testCalendarWidget()
         })
         
+        // Add Translation Test
+        alert.addAction(UIAlertAction(title: "Test Translation", style: .default) { [weak self] _ in
+            self?.testTranslation()
+        })
+        
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         
         return alert
@@ -1511,6 +1516,7 @@ public class StartViewController: BaseViewController<StartViewModel> {
         
         homeStack.addArrangedSubview(quickActionsStack)
         homeStack.addArrangedSubview(quickNotesCard)
+        homeStack.addArrangedSubview(translationCard)
         
         homeViewController.view.addSubview(homeStack)
         
@@ -2329,6 +2335,316 @@ public class StartViewController: BaseViewController<StartViewModel> {
         Task {
             await G1Controller.shared.g1Manager.removeQuickNote(id: note.id)
         }
+    }
+
+    private func testTranslation() {
+        if G1Controller.shared.g1Connected {
+            Task {
+                // Start live translation mode
+                let success = await G1Controller.shared.startLiveTranslation()
+                if !success {
+                    await MainActor.run {
+                        showAlert(title: "Error", message: "Failed to start translation mode")
+                    }
+                    return
+                }
+                
+                // Show alert with stop button
+                await MainActor.run {
+                    let alert = UIAlertController(
+                        title: "Live Translation Active",
+                        message: "Speak to see your words appear in the translation UI.",
+                        preferredStyle: .alert
+                    )
+                    
+                    alert.addAction(UIAlertAction(title: "Stop Translation", style: .default) { _ in
+                        // Stop translation when stop button is tapped
+                        Task {
+                            await G1Controller.shared.stopLiveTranslation()
+                        }
+                    })
+                    
+                    self.present(alert, animated: true)
+                }
+            }
+        } else {
+            showAlert(title: "G1 Not Connected", message: "Please connect to G1 glasses first.")
+        }
+    }
+
+    @objc private func toggleTranslation() {
+        Task {
+            if G1Controller.shared.g1Manager.currentMode == .translation {
+                // Stop translation if it's active
+                await G1Controller.shared.stopLiveTranslation()
+                if let button = translationCard.viewWithTag(200) as? UIButton {
+                    button.setTitle("Start Translation", for: .normal)
+                    button.backgroundColor = .systemBlue
+                }
+            } else {
+                // Start translation
+                let success = await G1Controller.shared.startLiveTranslation()
+                if success {
+                    if let button = translationCard.viewWithTag(200) as? UIButton {
+                        button.setTitle("Stop Translation", for: .normal)
+                        button.backgroundColor = .systemRed
+                    }
+                } else {
+                    showAlert(title: "Error", message: "Failed to start translation. Make sure glasses are connected.")
+                }
+            }
+        }
+    }
+
+    private lazy var translationCard: UIView = {
+        let card = UIView()
+        card.backgroundColor = UIColor(white: 0.12, alpha: 1.0)
+        card.layer.cornerRadius = 20
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOffset = CGSize(width: 0, height: 2)
+        card.layer.shadowOpacity = 0.2
+        card.layer.shadowRadius = 4
+        
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 12
+        stack.layoutMargins = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        stack.isLayoutMarginsRelativeArrangement = true
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Header row
+        let headerRow = UIStackView()
+        headerRow.axis = .horizontal
+        headerRow.spacing = 8
+        headerRow.alignment = .center
+        
+        let translationIcon = UIImageView(image: UIImage(systemName: "globe"))
+        translationIcon.tintColor = .white
+        translationIcon.contentMode = .scaleAspectFit
+        translationIcon.widthAnchor.constraint(equalToConstant: 20).isActive = true
+        translationIcon.heightAnchor.constraint(equalToConstant: 20).isActive = true
+        
+        let translationLabel = UILabel()
+        translationLabel.text = "Live Translation"
+        translationLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        translationLabel.textColor = .white
+        
+        headerRow.addArrangedSubview(translationIcon)
+        headerRow.addArrangedSubview(translationLabel)
+        headerRow.addArrangedSubview(UIView()) // Spacer
+        
+        // Language selection row
+        let languageRow = UIStackView()
+        languageRow.axis = .horizontal
+        languageRow.spacing = 8
+        languageRow.alignment = .center
+        
+        // Input language button
+        let inputLanguageButton = UIButton(type: .system)
+        // Load saved input language name
+        let savedInputCode = UserDefaults.standard.string(forKey: "selectedInputLanguage") ?? "en-US"
+        let inputLanguageName = getLanguageNameForCode(savedInputCode)
+        inputLanguageButton.setTitle(inputLanguageName, for: .normal)
+        inputLanguageButton.titleLabel?.font = .systemFont(ofSize: 14)
+        inputLanguageButton.setTitleColor(.white.withAlphaComponent(0.7), for: .normal)
+        inputLanguageButton.addTarget(self, action: #selector(selectInputLanguage), for: .touchUpInside)
+        inputLanguageButton.tag = 101 // Tag for input language button
+        
+        // Arrow icon
+        let arrowLabel = UILabel()
+        arrowLabel.text = "→"
+        arrowLabel.textColor = .white.withAlphaComponent(0.7)
+        arrowLabel.font = .systemFont(ofSize: 14)
+        
+        // Output language button
+        let outputLanguageButton = UIButton(type: .system)
+        // Load saved output language
+        let savedOutputLangRaw = UserDefaults.standard.integer(forKey: "selectedTranslationLanguage")
+        let outputLanguageName = getLanguageNameForTranslateLanguage(UInt8(savedOutputLangRaw))
+        outputLanguageButton.setTitle(outputLanguageName, for: .normal)
+        outputLanguageButton.titleLabel?.font = .systemFont(ofSize: 14)
+        outputLanguageButton.setTitleColor(.white.withAlphaComponent(0.7), for: .normal)
+        outputLanguageButton.addTarget(self, action: #selector(selectOutputLanguage), for: .touchUpInside)
+        outputLanguageButton.tag = 100 // Tag for output language button
+        
+        languageRow.addArrangedSubview(inputLanguageButton)
+        languageRow.addArrangedSubview(arrowLabel)
+        languageRow.addArrangedSubview(outputLanguageButton)
+        
+        // Translation controls
+        let controlsRow = UIStackView()
+        controlsRow.axis = .horizontal
+        controlsRow.spacing = 8
+        controlsRow.alignment = .center
+        
+        let startButton = UIButton(type: .system)
+        startButton.setTitle("Start Translation", for: .normal)
+        startButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        startButton.backgroundColor = .systemBlue
+        startButton.setTitleColor(.white, for: .normal)
+        startButton.layer.cornerRadius = 12
+        startButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        startButton.tag = 200 // Add tag for identification
+        startButton.addTarget(self, action: #selector(toggleTranslation), for: .touchUpInside)
+        
+        controlsRow.addArrangedSubview(startButton)
+        
+        stack.addArrangedSubview(headerRow)
+        stack.addArrangedSubview(languageRow)
+        stack.addArrangedSubview(controlsRow)
+        
+        card.addSubview(stack)
+        
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor)
+        ])
+        
+        return card
+    }()
+
+    private func getLanguageNameForCode(_ code: String) -> String {
+        let languages = [
+            ("English (US)", "en-US"),
+            ("English (UK)", "en-GB"),
+            ("English (Australia)", "en-AU"),
+            ("English (Canada)", "en-CA"),
+            ("English (India)", "en-IN"),
+            ("Spanish (Spain)", "es-ES"),
+            ("Spanish (Mexico)", "es-MX"),
+            ("Spanish (US)", "es-US"),
+            ("Spanish (Latin America)", "es-419"),
+            ("French (France)", "fr-FR"),
+            ("French (Canada)", "fr-CA"),
+            ("German", "de-DE"),
+            ("Italian", "it-IT"),
+            ("Japanese", "ja-JP"),
+            ("Korean", "ko-KR"),
+            ("Portuguese (Brazil)", "pt-BR"),
+            ("Russian", "ru-RU"),
+            ("Turkish", "tr-TR"),
+            ("Arabic", "ar-SA"),
+            ("Chinese (Mandarin)", "zh-CN"),
+            ("Chinese (Cantonese)", "zh-HK")
+        ]
+        
+        return languages.first { $0.1 == code }?.0 ?? "English (US)"
+    }
+
+    @objc private func selectInputLanguage() {
+        let alert = UIAlertController(title: "Select Input Language", message: nil, preferredStyle: .actionSheet)
+        
+        let languages = [
+            ("English (US)", "en-US"),
+            ("English (UK)", "en-GB"),
+            ("English (Australia)", "en-AU"),
+            ("English (Canada)", "en-CA"),
+            ("English (India)", "en-IN"),
+            ("Spanish (Spain)", "es-ES"),
+            ("Spanish (Mexico)", "es-MX"),
+            ("Spanish (US)", "es-US"),
+            ("Spanish (Latin America)", "es-419"),
+            ("French (France)", "fr-FR"),
+            ("French (Canada)", "fr-CA"),
+            ("German", "de-DE"),
+            ("Italian", "it-IT"),
+            ("Japanese", "ja-JP"),
+            ("Korean", "ko-KR"),
+            ("Portuguese (Brazil)", "pt-BR"),
+            ("Russian", "ru-RU"),
+            ("Turkish", "tr-TR"),
+            ("Arabic", "ar-SA"),
+            ("Chinese (Mandarin)", "zh-CN"),
+            ("Chinese (Cantonese)", "zh-HK")
+        ]
+        
+        for (name, code) in languages {
+            alert.addAction(UIAlertAction(title: name, style: .default) { [weak self] _ in
+                if let button = self?.translationCard.viewWithTag(101) as? UIButton {
+                    button.setTitle(name, for: .normal)
+                }
+                // Store selected language for later use
+                UserDefaults.standard.set(code, forKey: "selectedInputLanguage")
+                // Update speech recognizer
+                G1Controller.shared.updateSpeechRecognitionLanguage(code)
+            })
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+    
+    @objc private func selectOutputLanguage() {
+        let alert = UIAlertController(title: "Select Target Language", message: nil, preferredStyle: .actionSheet)
+        
+        let languages = [
+            ("Chinese", TranslateLanguage.chinese),
+            ("English", TranslateLanguage.english),
+            ("Japanese", TranslateLanguage.japanese),
+            ("Korean", TranslateLanguage.korean),
+            ("French", TranslateLanguage.french),
+            ("German", TranslateLanguage.german),
+            ("Spanish (Spain)", TranslateLanguage.spanish),
+            ("Spanish (Latin America)", TranslateLanguage.spanish),
+            ("Russian", TranslateLanguage.russian),
+            ("Dutch", TranslateLanguage.dutch),
+            ("Norwegian", TranslateLanguage.norwegian),
+            ("Danish", TranslateLanguage.danish),
+            ("Swedish", TranslateLanguage.swedish),
+            ("Finnish", TranslateLanguage.finnish),
+            ("Italian", TranslateLanguage.italian),
+            ("Arabic", TranslateLanguage.arabic),
+            ("Hindi", TranslateLanguage.hindi),
+            ("Bengali", TranslateLanguage.bengali),
+            ("Cantonese", TranslateLanguage.cantonese)
+        ]
+        
+        for (name, language) in languages {
+            alert.addAction(UIAlertAction(title: name, style: .default) { [weak self] _ in
+                if let button = self?.translationCard.viewWithTag(100) as? UIButton {
+                    button.setTitle(name, for: .normal)
+                }
+                // Store both the language enum and the display name for later use
+                UserDefaults.standard.set(language.rawValue, forKey: "selectedTranslationLanguage")
+                UserDefaults.standard.set(name, forKey: "selectedTranslationLanguageName")
+            })
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func getLanguageNameForTranslateLanguage(_ rawValue: UInt8) -> String {
+        // First try to get the saved display name
+        if let savedName = UserDefaults.standard.string(forKey: "selectedTranslationLanguageName") {
+            return savedName
+        }
+
+        // Fallback to basic mapping
+        let languages: [(String, TranslateLanguage)] = [
+            ("Chinese", .chinese),
+            ("English", .english),
+            ("Japanese", .japanese),
+            ("Korean", .korean),
+            ("French", .french),
+            ("German", .german),
+            ("Spanish (Spain)", .spanish),
+            ("Russian", .russian),
+            ("Dutch", .dutch),
+            ("Norwegian", .norwegian),
+            ("Danish", .danish),
+            ("Swedish", .swedish),
+            ("Finnish", .finnish),
+            ("Italian", .italian),
+            ("Arabic", .arabic),
+            ("Hindi", .hindi),
+            ("Bengali", .bengali),
+            ("Cantonese", .cantonese)
+        ]
+        
+        return languages.first { $0.1.rawValue == rawValue }?.0 ?? "French"
     }
 }
 

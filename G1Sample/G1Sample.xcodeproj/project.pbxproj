@@ -154,6 +154,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = G1Sample/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app requires Bluetooth access to connect to nearby devices.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need your location to provide accurate weather information for your area, even when the app is in the background.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "We need your location to provide accurate weather information for your area, even when the app is in the background.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to provide accurate weather information for your area.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to the microphone to support speech recognition for voice dictation of notes";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app needs access to speech recognition to support voice dictation of notes";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -186,6 +189,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = G1Sample/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app requires Bluetooth access to connect to nearby devices.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need your location to provide accurate weather information for your area, even when the app is in the background.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "We need your location to provide accurate weather information for your area, even when the app is in the background.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to provide accurate weather information for your area.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to the microphone to support speech recognition for voice dictation of notes";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app needs access to speech recognition to support voice dictation of notes";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -199,7 +205,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.fpirpilidis.G1Sample;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fpirpilidis.G1Samples;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
