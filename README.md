@@ -102,8 +102,8 @@ Ideally, for production use we would use an actual API for translation.
 3. Hit the play button to build and run
 
 ## Thanks
-A lot of the glasses functionality was mapped out by those reverse engineering the g1 glasses. I would like to thank them for their work, as I would not have come close to finishing this without
-their insights. Additionally, I would like to thank those who put these insights into practice by building libraries and apps out of them for us to draw inspiration from.
+A lot of the glasses functionality was mapped out by those reverse engineering the g1 glasses, as I would not have come close to finishing this without
+their insights. I would like to thank those who put these insights into practice by building libraries and apps out of them for us to draw inspiration from.
 
  - https://github.com/emingenc/even_glasses
  - https://github.com/emingenc/g1_flutter_blue_plus/
