@@ -1,4 +1,4 @@
-# G1 iOS Sample Project
+# G1 iOS Custom App
 
 
 
