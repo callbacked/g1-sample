@@ -12,7 +12,7 @@
 This project is a fork based off of the G1Sample Project by @FilipposPirpilidis for the Even Realities G1 Glasses.
 
 
-**BIG GIANT DISCLAIMER:** I am not an iOS dev, this is my first time working with Swift because I wanted to use the speech recognition api, so fair warning to anyone who wants to see and modify the awful code I wrote with some assistance from AI. 
+**BIG GIANT DISCLAIMER:** I am not a big iOS dev, this is my first time working with Swift because I wanted to use the speech recognition api, so fair warning to anyone who wants to see and modify the awful code I wrote with some assistance from AI. 
 
 This project was more to see how much of the glasses functionality can be implemented without an SDK. Not a polished app by any means. This is a proof of concept if anything -- expect bugs.
 
